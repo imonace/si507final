@@ -1,3 +1,4 @@
+import avl
 import cache
 import credentials
 import datetime
@@ -66,11 +67,33 @@ def get_nearest_stations(location, limit='10'):
     CACHE_DICT[location] = data
     return CACHE_DICT[location]
 
-def request_googlemap_api(term):
-    pass
+def get_connector_type():
+    while True:
+        try:
+            connector_type = int(input("Select your EV connector type (1: Tesla  2: J1772): "))
+            if connector_type == 1:
+                return 'TESLA'
+            elif connector_type == 2:
+                return 'J1772'
+            else:
+                raise ValueError
+        except:
+            print("Please enter 1 or 2!")
+            continue
 
 def format_station_data(station):
-    pass
+    # get user connector type first
+    connector_type = get_connector_type()
+    # then filter for available stations
+    # available_station = [x for x in station['fuel_stations'] if connector_type in x['ev_connector_types']]
+    # available_station.sort(key=lambda x: x['distance'])
+    # now construct tree structure for user access
+    myTree = avl.AVLTree()
+    root = None
+    for station in station['fuel_stations']:
+        root = myTree.insert_node(root, station['distance'], station)
+    # myTree.printHelper(root)
+
 
 def main():
     global CACHE_DICT
@@ -81,6 +104,6 @@ def main():
     cache.save_cache(CACHE_DICT)
 
 if __name__ == "__main__":
-    #main()
+    main()
     #print('starting Flask app', app.name)  
-    app.run(debug=True)
+    #app.run(debug=True)
