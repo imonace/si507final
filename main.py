@@ -1,7 +1,14 @@
 import cache
+import credentials
 import datetime
 import requests
-import secrets
+from flask import Flask
+
+app = Flask('Electric Charger Finder')
+
+@app.route('/')
+def index():
+    return '<p>Hello World!</p>'
 
 CACHE_DICT = {}
 
@@ -27,7 +34,7 @@ def get_nearest_stations(location):
     # request data from NREL API
     base_url = 'https://developer.nrel.gov/api/alt-fuel-stations/v1/nearest.json?'
     params = {
-        'api_key': secrets.NREL_API_KEY,
+        'api_key': credentials.NREL_API_KEY,
         'location': location,
         'fuel_type': 'ELEC',    #
         'status': 'E',          # only show stations that are available
@@ -54,4 +61,5 @@ def main():
     cache.save_cache(CACHE_DICT)
 
 if __name__ == "__main__":
-    main()
+    #print('starting Flask app', app.name)  
+    app.run(debug=True)
