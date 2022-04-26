@@ -33,48 +33,10 @@ def index():
 
 
 
-def get_user_location():
-    while True:
-        try:
-            location = input("Enter your location or ZIP code to get the nearest gas stations: ")
-            if location == '':
-                raise ValueError
-            return location
-        except:
-            print("Please enter a valid location!")
-            continue
-
-
-def get_stations_from_cache(location, limit='10'):
-    # see if cache is available and up to date
-    data = r.get(location)
-    if data is None:
-        data = query_nrel_api(location, limit)
-        status = r.set(location, json.dumps(data), ex=120)  # 604800 cache for up to a week
-        print("Cache miss, querying NREL API, caching results status:", status)
-        return data
-    else:
-        return json.loads(data)
-
-
-def query_nrel_api(location, limit='10'):
-    # request data from NREL API
-    base_url = 'https://developer.nrel.gov/api/alt-fuel-stations/v1/nearest.json?'
-    params = {
-        'api_key': credentials.NREL_API_KEY,
-        'location': location,
-        'fuel_type': 'ELEC',    #
-        'status': 'E',          # only show stations that are available
-        'access': 'public',     # only show public stations
-        'limit': limit
-    }
-    return requests.get(base_url, params).json()
-
-
 def get_connector_type():
     while True:
         try:
-            connector_type = int(input("Select your EV connector type (1: Tesla  2: J1772): "))
+            connector_type = int(input("Select your EV connector type (1: TESLA  2: J1772): "))
             if connector_type == 1:
                 return 'TESLA'
             elif connector_type == 2:
@@ -86,27 +48,72 @@ def get_connector_type():
             continue
 
 
-def format_station_data(station):
-    # get user connector type first
-    connector_type = get_connector_type()
-    # then filter for available stations
-    # available_station = [x for x in station['fuel_stations'] if connector_type in x['ev_connector_types']]
-    # available_station.sort(key=lambda x: x['distance'])
+def get_user_option():
+    while True:
+        try:
+            return int(input("Enter your option: "))
+        except:
+            print("Please enter a valid number!")
+            continue
+
+
+def get_user_location():
+    while True:
+        try:
+            location = input("Please enter your location or ZIP code: ")
+            if location == '':
+                raise ValueError
+            return location
+        except:
+            print("Please enter a valid location!")
+            continue
+
+
+def get_results_from_cache(location, limit='50'):
+    # see if cache is available and up to date
+    data = r.get(location)
+    if data is None:
+        print("Cache miss, querying NREL API, please wait...")
+        data = query_nrel_api(location, limit)
+        r.set(location, json.dumps(data), ex=120)  # 604800 seconds, cache for up to a week
+        return data
+    else:
+        print("Cache hit, returning cached data...")
+        return json.loads(data)
+
+
+def query_nrel_api(location, limit):
+    # request data from NREL API
+    base_url = 'https://developer.nrel.gov/api/alt-fuel-stations/v1/nearest.json?'
+    params = {
+        'api_key': credentials.NREL_API_KEY,
+        'location': location,
+        'radius': '50.0',
+        'fuel_type': 'ELEC',    #
+        'status': 'E',          # only show stations that are available
+        'access': 'public',     # only show public stations
+        'limit': limit
+    }
+    return requests.get(base_url, params).json()
+
+
+def format_station_tree(station, connector_type):
+    # filter for available stations
+    available_station = [x for x in station['fuel_stations'] if connector_type in x['ev_connector_types']]
+    print(f"Found {len(available_station)} available stations nearby.")
+
     # now construct tree structure for user access
     myTree = avl.AVLTree()
     root = None
-    for station in station['fuel_stations']:
-        root = myTree.insert_node(root, station['distance'], station)
+    for available_station in available_station['fuel_stations']:
+        root = myTree.insert_node(root, available_station['distance'], available_station)
+
     # myTree.printHelper(root)
+    return myTree, root
 
 
-def show_command_line():
-    print("Electric Charger Finder")
-    print("Command Line Interface")
-    print("-----------------------")
-    print("1. Get nearest stations")
-    print("2. Quit")
-    print("-----------------------")
+def show_result_command_line(myTree, root):
+    myTree.printHelper(root)
 
 
 def show_map_interactive():
@@ -120,16 +127,66 @@ def show_route_static():
 
 
 def main():
+    connector_type = 'TESLA' # default connector type to Tesla
+    print("----------------------------------")
+    print("Welcome to Electric Charger Finder")
 
-    
-    location = get_user_location()
-    station = get_stations_from_cache(location)
-    results = format_station_data(station)
+    while True:
+        print("----------------------------------")
+        print("1. Get nearby EV charging stations")
+        print(f"2. Set EV connector type (current: {connector_type})")
+        print("3. Quit")
+        option = get_user_option()
+        print("----------------------------------")
 
-    r.save() # persist cache to disk before exiting
+        if option == 1:
+            
+            location = get_user_location()
+            results = get_results_from_cache(location)
+            myTree, root = format_station_tree(results, connector_type)
+            
+            while True:
+                print("----------------------------------")
+                print("1. Show stations in command line")
+                print("2. Show result in interactive map")
+                print("3. Show route to nearest station")
+                print("4. Print result tree (debug)")
+                print("5. Back")
+                option = get_user_option()
+                print("----------------------------------")
+
+                if option == 1:
+                    show_result_command_line(myTree, root)
+                elif option == 2:
+                    show_map_interactive()
+                elif option == 3:
+                    show_route_static()
+                elif option == 4:
+                    myTree.printHelper(root)
+                elif option == 5:
+                    break
+                else:
+                    print("Please select a valid option!")
+                    continue
+
+        
+        elif option == 2:
+            connector_type = get_connector_type()
+            print(f"EV connector type set to {connector_type}.")
+
+        elif option == 3:
+            print("Quitting...")
+            r.save() # persist cache to disk before quitting
+            print("Goodbye!")
+            break
+
+        else:
+            print("Please select a valid option!")
+            continue
     
 
 if __name__ == "__main__":
-    main()
     #print('starting Flask app', app.name)  
     #app.run(debug=True)
+    main()
+    
