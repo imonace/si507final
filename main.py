@@ -1,11 +1,12 @@
 import avl
-import cache
 import credentials
-import datetime
+import json
 import requests
+import redis
 from flask import Flask
 
 app = Flask('Electric Charger Finder')
+r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 @app.route('/')
 def index():
@@ -30,27 +31,33 @@ def index():
   </body>
 </html>'''
 
-CACHE_DICT = {}
 
-def get_user_input_zipcode():
+
+def get_user_location():
     while True:
         try:
-            zipcode = str(int(input("Enter your ZIP code to get the nearest gas stations: ")))
-            if len(zipcode) != 5:
+            location = input("Enter your location or ZIP code to get the nearest gas stations: ")
+            if location == '':
                 raise ValueError
-            return zipcode
+            return location
         except:
-            print("Please enter a valid 5 digits ZIP code!")
+            print("Please enter a valid location!")
             continue
 
-def get_nearest_stations(location, limit='10'):
-    # see if cache is available and up to date(with in a week)
-    if location in CACHE_DICT.keys():
-        last_update = datetime.datetime.fromtimestamp(CACHE_DICT[location]['last_update'])
-        now = datetime.datetime.now()
-        if (now - last_update).days < 7:
-            print("Using cached data")
-            return CACHE_DICT[location]
+
+def get_stations_from_cache(location, limit='10'):
+    # see if cache is available and up to date
+    data = r.get(location)
+    if data is None:
+        data = query_nrel_api(location, limit)
+        status = r.set(location, json.dumps(data), ex=120)  # 604800 cache for up to a week
+        print("Cache miss, querying NREL API, caching results status:", status)
+        return data
+    else:
+        return json.loads(data)
+
+
+def query_nrel_api(location, limit='10'):
     # request data from NREL API
     base_url = 'https://developer.nrel.gov/api/alt-fuel-stations/v1/nearest.json?'
     params = {
@@ -61,11 +68,8 @@ def get_nearest_stations(location, limit='10'):
         'access': 'public',     # only show public stations
         'limit': limit
     }
-    response = requests.get(base_url, params)
-    data = response.json()
-    data['last_update'] = datetime.datetime.now().timestamp()
-    CACHE_DICT[location] = data
-    return CACHE_DICT[location]
+    return requests.get(base_url, params).json()
+
 
 def get_connector_type():
     while True:
@@ -81,6 +85,7 @@ def get_connector_type():
             print("Please enter 1 or 2!")
             continue
 
+
 def format_station_data(station):
     # get user connector type first
     connector_type = get_connector_type()
@@ -95,13 +100,34 @@ def format_station_data(station):
     # myTree.printHelper(root)
 
 
+def show_command_line():
+    print("Electric Charger Finder")
+    print("Command Line Interface")
+    print("-----------------------")
+    print("1. Get nearest stations")
+    print("2. Quit")
+    print("-----------------------")
+
+
+def show_map_interactive():
+    pass
+
+def show_map_static():
+    pass
+
+def show_route_static():
+    pass
+
+
 def main():
-    global CACHE_DICT
-    CACHE_DICT = cache.open_cache()
-    zipcode = get_user_input_zipcode()
-    station = get_nearest_stations(zipcode)
+
+    
+    location = get_user_location()
+    station = get_stations_from_cache(location)
     results = format_station_data(station)
-    cache.save_cache(CACHE_DICT)
+
+    r.save() # persist cache to disk before exiting
+    
 
 if __name__ == "__main__":
     main()
