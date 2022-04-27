@@ -21,6 +21,7 @@ def direction():
     end = request.args.get('end')
     return render_template('direction.html',api_key=credentials.GMAP_API_KEY, start=start, end=end)
 
+
 def get_connector_type():
     while True:
         try:
@@ -128,17 +129,19 @@ def main():
             location = get_user_location()
             results = get_results_from_cache(location)
 
-            geo_location = {'lat': results['latitude'], 'lng': results['longitude']}
+            start = {'lat': results['latitude'], 'lng': results['longitude']}
 
             myTree, root = format_station_tree(results, connector_type)
-            nearset = myTree.getMinValueNode(root)
+            
+            dest = myTree.getMinValueNode(root).data
+            end = {'lat': dest['latitude'], 'lng': dest['longitude']}
 
             while True:
                 print("----------------------------------")
                 print("1. Show stations in command line")
                 print("2. Show stations interactively")
                 print("3. Show stations in plots")
-                print("4. Show route to station (current select: {})".format(nearset.data['station_name']))
+                print("4. Show route to station (current select: {})".format(dest['station_name']))
                 print("5. Print result tree (debug)")
                 print("6. Back")
                 option = get_user_option()
@@ -151,7 +154,7 @@ def main():
                 elif option == 3:
                     pass
                 elif option == 4:
-                    webbrowser.open(f"http://127.0.0.1:5000/direction?start=1&end=2")
+                    webbrowser.open(f"http://127.0.0.1:5000/direction?start={start['lat']},{start['lng']}&end={end['lat']},{end['lng']}")
                 elif option == 5:
                     myTree.printHelper(root)
                 elif option == 6:
@@ -179,7 +182,9 @@ def main():
 if __name__ == "__main__":
     print('Starting Flask app', app.name)
     #app.run(debug=True)
-    threading.Thread(target=lambda: app.run(debug=False)).start()
+    t = threading.Thread(target=lambda: app.run(debug=True, use_reloader=False))
+    t.start()
     time.sleep(1)
     main()
+    print('Exiting Flask app', app.name)
     
