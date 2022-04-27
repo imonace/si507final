@@ -3,35 +3,23 @@ import credentials
 import json
 import requests
 import redis
-from flask import Flask
+import webbrowser
+import time
+import threading
+from flask import Flask, render_template, request
 
 app = Flask('Electric Charger Finder')
 r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 @app.route('/')
 def index():
-    return f'''<!DOCTYPE html>
-<html>
-  <head>
-    <title>ECF</title>
+    return render_template('index.html',api_key=credentials.GMAP_API_KEY, orig_data={ 'lat': -70.344, 'lng': 131.036 } )
 
-    <link rel="stylesheet" type="text/css" href="/static/style.css" />
-    <script src="/static/index.js"></script>
-  </head>
-  <body>
-    <h3>Electric Charger Finder</h3>
-    <!--The div element for the map -->
-    <div id="map"></div>
-
-    <!-- Async script executes immediately and must be after any DOM elements used in callback. -->
-    <script
-      src="https://maps.googleapis.com/maps/api/js?key={credentials.GMAP_API_KEY}&callback=initMap&v=weekly"
-      async
-    ></script>
-  </body>
-</html>'''
-
-
+@app.route('/direction')
+def direction():
+    start = request.args.get('start')
+    end = request.args.get('end')
+    return render_template('direction.html',api_key=credentials.GMAP_API_KEY, start=start, end=end)
 
 def get_connector_type():
     while True:
@@ -75,7 +63,7 @@ def get_results_from_cache(location, limit='50'):
     if data is None:
         print("Cache miss, querying NREL API, please wait...")
         data = query_nrel_api(location, limit)
-        r.set(location, json.dumps(data), ex=120)  # 604800 seconds, cache for up to a week
+        r.set(location, json.dumps(data), ex=2400)  # 604800 seconds, cache for up to a week
         return data
     else:
         print("Cache hit, returning cached data...")
@@ -97,23 +85,19 @@ def query_nrel_api(location, limit):
     return requests.get(base_url, params).json()
 
 
-def format_station_tree(station, connector_type):
+def format_station_tree(results, connector_type):
     # filter for available stations
-    available_station = [x for x in station['fuel_stations'] if connector_type in x['ev_connector_types']]
-    print(f"Found {len(available_station)} available stations nearby.")
+    available_stations = [x for x in results['fuel_stations'] if connector_type in x['ev_connector_types']]
+    print(f"Found {len(available_stations)} available stations nearby.")
 
     # now construct tree structure for user access
     myTree = avl.AVLTree()
     root = None
-    for available_station in available_station['fuel_stations']:
-        root = myTree.insert_node(root, available_station['distance'], available_station)
+    for station in available_stations:
+        root = myTree.insert_node(root, station['distance'], station)
 
     # myTree.printHelper(root)
     return myTree, root
-
-
-def show_result_command_line(myTree, root):
-    myTree.printHelper(root)
 
 
 def show_map_interactive():
@@ -134,7 +118,7 @@ def main():
     while True:
         print("----------------------------------")
         print("1. Get nearby EV charging stations")
-        print(f"2. Set EV connector type (current: {connector_type})")
+        print("2. Set EV connector type (current: {})".format(connector_type))
         print("3. Quit")
         option = get_user_option()
         print("----------------------------------")
@@ -143,27 +127,34 @@ def main():
             
             location = get_user_location()
             results = get_results_from_cache(location)
+
+            geo_location = {'lat': results['latitude'], 'lng': results['longitude']}
+
             myTree, root = format_station_tree(results, connector_type)
-            
+            nearset = myTree.getMinValueNode(root)
+
             while True:
                 print("----------------------------------")
                 print("1. Show stations in command line")
-                print("2. Show result in interactive map")
-                print("3. Show route to nearest station")
-                print("4. Print result tree (debug)")
-                print("5. Back")
+                print("2. Show stations interactively")
+                print("3. Show stations in plots")
+                print("4. Show route to station (current select: {})".format(nearset.data['station_name']))
+                print("5. Print result tree (debug)")
+                print("6. Back")
                 option = get_user_option()
                 print("----------------------------------")
 
                 if option == 1:
-                    show_result_command_line(myTree, root)
+                    myTree.preOrder(root)
                 elif option == 2:
-                    show_map_interactive()
+                    pass
                 elif option == 3:
-                    show_route_static()
+                    pass
                 elif option == 4:
-                    myTree.printHelper(root)
+                    webbrowser.open(f"http://127.0.0.1:5000/direction?start=1&end=2")
                 elif option == 5:
+                    myTree.printHelper(root)
+                elif option == 6:
                     break
                 else:
                     print("Please select a valid option!")
@@ -186,7 +177,9 @@ def main():
     
 
 if __name__ == "__main__":
-    #print('starting Flask app', app.name)  
+    print('Starting Flask app', app.name)
     #app.run(debug=True)
+    threading.Thread(target=lambda: app.run(debug=False)).start()
+    time.sleep(1)
     main()
     

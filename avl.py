@@ -136,8 +136,8 @@ class AVLTree(object):
     def preOrder(self, root):
         if not root:
             return
-        print("{0} ".format(root.key), end="")
         self.preOrder(root.left)
+        print(f'"{root.data["station_name"]}" at {root.data["street_address"]}, {root.data["distance"]} miles away')
         self.preOrder(root.right)
 
     # Print the tree

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>ECF</title>
+    <link rel="stylesheet" type="text/css" href="/static/style.css" />
+    
+
+    <script type="text/javascript">
+      var orig = {{ orig_data|tojson }};
+    </script>
+
+    <script src="/static/index.js"></script>
+  </head>
+  <body>
+    <h3>Electric Charger Finder</h3>
+    <!--The div element for the map -->
+    <div id="map"></div>
+
+    <!-- Async script executes immediately and must be after any DOM elements used in callback. -->
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap&v=weekly"
+      async
+    ></script>
+  </body>
+</html>
