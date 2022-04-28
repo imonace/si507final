@@ -65,15 +65,20 @@ def get_user_location():
 
 def get_results_from_cache(location):
     # see if cache is available and up to date
-    data = r.get(location)
-    if data is None:
-        print("Cache miss, querying NREL API, please wait...")
+    try:
+        data = r.get(location)
+        if data is None:
+            print("Cache miss, querying NREL API, please wait...")
+            data = query_nrel_api(location)
+            r.set(location, json.dumps(data), ex=604800)  # 604800 seconds before expire, cache for up to a week
+            return data
+        else:
+            print("Cache hit, returning cached data...")
+            return json.loads(data)
+    except:
+        print("Cache server down, querying NREL API, please wait...")
         data = query_nrel_api(location)
-        r.set(location, json.dumps(data), ex=2400)  # 604800 seconds, cache for up to a week
         return data
-    else:
-        print("Cache hit, returning cached data...")
-        return json.loads(data)
 
 
 def query_nrel_api(location):
