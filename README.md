@@ -12,3 +12,5 @@ GMAP_API_KEY = 'see final report'
 This application requires a running Redis database for caching, it can be set up by using docker with `docker-compose.yml` file provided in the repo.
 
 For python, it requires Flask, redis, requests and Pillow, see requirements.txt for details.
+
+To run the application, run the following command: `python3 ./main.py`
