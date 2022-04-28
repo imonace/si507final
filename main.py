@@ -5,7 +5,7 @@ import requests
 import redis
 import webbrowser
 import time
-import threading
+from multiprocessing import Process
 from flask import Flask, render_template, request
 
 app = Flask('Electric Charger Finder')
@@ -58,12 +58,12 @@ def get_user_location():
             continue
 
 
-def get_results_from_cache(location, limit='50'):
+def get_results_from_cache(location):
     # see if cache is available and up to date
     data = r.get(location)
     if data is None:
         print("Cache miss, querying NREL API, please wait...")
-        data = query_nrel_api(location, limit)
+        data = query_nrel_api(location)
         r.set(location, json.dumps(data), ex=2400)  # 604800 seconds, cache for up to a week
         return data
     else:
@@ -71,7 +71,7 @@ def get_results_from_cache(location, limit='50'):
         return json.loads(data)
 
 
-def query_nrel_api(location, limit):
+def query_nrel_api(location):
     # request data from NREL API
     base_url = 'https://developer.nrel.gov/api/alt-fuel-stations/v1/nearest.json?'
     params = {
@@ -81,12 +81,12 @@ def query_nrel_api(location, limit):
         'fuel_type': 'ELEC',    #
         'status': 'E',          # only show stations that are available
         'access': 'public',     # only show public stations
-        'limit': limit
+        'limit': '50'           # limit to 50 results
     }
     return requests.get(base_url, params).json()
 
 
-def format_station_tree(results, connector_type):
+def format_station_tree(results, connector_type, limit=10):
     # filter for available stations
     available_stations = [x for x in results['fuel_stations'] if connector_type in x['ev_connector_types']]
     print(f"Found {len(available_stations)} available stations nearby.")
@@ -94,11 +94,24 @@ def format_station_tree(results, connector_type):
     # now construct tree structure for user access
     myTree = avl.AVLTree()
     root = None
-    for station in available_stations:
+    for station in available_stations[0:limit]:
         root = myTree.insert_node(root, station['distance'], station)
 
     # myTree.printHelper(root)
     return myTree, root
+
+
+def select_station(myTree, root):
+    while True:
+        try:
+            id = int(input("Please enter the id of preferred station: "))
+            node = myTree.search(root, id)
+            if node is None:
+                raise ValueError
+            return node
+        except:
+            print("Please enter a valid id!")
+            continue
 
 
 def show_map_interactive():
@@ -133,45 +146,55 @@ def main():
 
             myTree, root = format_station_tree(results, connector_type)
             
-            dest = myTree.getMinValueNode(root).data
+            node = myTree.getMinValueNode(root)
+            dest = node.data
             end = {'lat': dest['latitude'], 'lng': dest['longitude']}
+
+            printed = False
 
             while True:
                 print("----------------------------------")
-                print("1. Show stations in command line")
-                print("2. Show stations interactively")
-                print("3. Show stations in plots")
-                print("4. Show route to station (current select: {})".format(dest['station_name']))
-                print("5. Print result tree (debug)")
-                print("6. Back")
+                print("1. Show results in command line")
+                print("2. Show results in web browser")
+                print("   Current selected: {}".format(dest['station_name']))
+                print("3. Select a different station")
+                print("4. Show detailed information of selected station")
+                print("5. Show route to the selected station")
+                print("6. Print tree data structure (debug)")
+                print("7. Back")
                 option = get_user_option()
                 print("----------------------------------")
 
                 if option == 1:
                     myTree.preOrder(root)
+                    printed = True
                 elif option == 2:
                     pass
                 elif option == 3:
-                    pass
+                    if not printed:
+                        myTree.preOrder(root)
+                        printed = True
+                    node = select_station(myTree, root)
+                    dest = node.data
+                    end = {'lat': dest['latitude'], 'lng': dest['longitude']}
                 elif option == 4:
-                    webbrowser.open(f"http://127.0.0.1:5000/direction?start={start['lat']},{start['lng']}&end={end['lat']},{end['lng']}")
+                    pass
                 elif option == 5:
-                    myTree.printHelper(root)
+                    webbrowser.open(f"http://127.0.0.1:5000/direction?start={start['lat']},{start['lng']}&end={end['lat']},{end['lng']}")
                 elif option == 6:
+                    myTree.printHelper(root)
+                elif option == 7:
                     break
                 else:
                     print("Please select a valid option!")
                     continue
-
         
         elif option == 2:
             connector_type = get_connector_type()
             print(f"EV connector type set to {connector_type}.")
 
         elif option == 3:
-            print("Quitting...")
             r.save() # persist cache to disk before quitting
-            print("Goodbye!")
             break
 
         else:
@@ -179,12 +202,19 @@ def main():
             continue
     
 
-if __name__ == "__main__":
+def start_server():
+    # start flask server
     print('Starting Flask app', app.name)
+    app.run(debug=True, use_reloader=False)
+
+if __name__ == "__main__":
     #app.run(debug=True)
-    t = threading.Thread(target=lambda: app.run(debug=True, use_reloader=False))
+    t = Process(target=start_server)
     t.start()
     time.sleep(1)
     main()
+    print("Quitting...")
     print('Exiting Flask app', app.name)
-    
+    print("Goodbye!")
+    t.terminate()
+    t.join()
