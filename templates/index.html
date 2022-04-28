@@ -1,14 +1,14 @@
-<!DOCTYPE html>
 <html>
   <head>
     <title>ECF</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=default"></script>
+
     <link rel="stylesheet" type="text/css" href="/static/style.css" />
-    
-
     <script type="text/javascript">
-      var orig = {{ orig_data|tojson }};
+      var loc = { lat: [{{ loc }}][0], lng: [{{ loc }}][1] };
+      var locTitle = "{{ locTitle }}";
+      var locString = "{{ locString|safe }}";
     </script>
-
     <script src="/static/index.js"></script>
   </head>
   <body>
@@ -16,10 +16,15 @@
     <!--The div element for the map -->
     <div id="map"></div>
 
-    <!-- Async script executes immediately and must be after any DOM elements used in callback. -->
+    <!-- 
+     The `defer` attribute causes the callback to execute after the full HTML
+     document has been parsed. For non-blocking uses, avoiding race conditions,
+     and consistent behavior across browsers, consider loading using Promises
+     with https://www.npmjs.com/package/@googlemaps/js-api-loader.
+    -->
     <script
       src="https://maps.googleapis.com/maps/api/js?key={{ api_key }}&callback=initMap&v=weekly"
-      async
+      defer
     ></script>
   </body>
 </html>

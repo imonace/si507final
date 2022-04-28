@@ -14,7 +14,10 @@ r = redis.Redis(host='localhost', port=6379, decode_responses=True)
 
 @app.route('/')
 def index():
-    return render_template('index.html',api_key=credentials.GMAP_API_KEY, orig_data={ 'lat': -70.344, 'lng': 131.036 } )
+    loc = request.args.get('loc')
+    locTitle = request.args.get('locTitle')
+    locString = request.args.get('locString')
+    return render_template('index.html',api_key=credentials.GMAP_API_KEY, loc=loc, locTitle=locTitle, locString=locString)
 
 @app.route('/direction')
 def direction():
@@ -136,8 +139,19 @@ def show_map_static(myTree, root):
     im.show()
 
 
-def show_station_interactive():
-    pass
+def show_station_interactive(dest):
+    base = 'http://127.0.0.1:5000/?'
+    loc = 'loc=' + str(dest['latitude']) + ',' + str(dest['longitude']) + '&'
+    locTitle = 'locTitle=' + dest['station_name'] + '&'
+    locString = 'locString=' + '<p><b>Name: ' + dest['station_name'] + '</b></p>'\
+                             + '<p>Address: ' + dest['street_address'] + '</p>'\
+                             + '<p>City: ' + dest['city'] + '</p>'\
+                             + '<p>ZIP: ' + dest['zip'] + '</p>'\
+                             + '<p>Phone: ' + dest['station_phone'] + '</p>'\
+                             + '<p>Hours of operation: ' + dest['access_days_time'] + '</p>'\
+                             + '<p>Pricing: ' + dest['ev_pricing'] + '</p>'
+    uri = base + loc + locTitle + locString
+    webbrowser.open(uri)
 
 
 def core_function():
@@ -194,7 +208,7 @@ def core_function():
                     dest = node.data
                     end = {'lat': dest['latitude'], 'lng': dest['longitude']}
                 elif option == 4:
-                    show_station_interactive()
+                    show_station_interactive(dest)
                 elif option == 5:
                     webbrowser.open(f"http://127.0.0.1:5000/direction?start={start['lat']},{start['lng']}&end={end['lat']},{end['lng']}")
                 elif option == 6:
