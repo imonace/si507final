@@ -7,6 +7,7 @@ import webbrowser
 import time
 from multiprocessing import Process
 from flask import Flask, render_template, request
+from PIL import Image
 
 app = Flask('Electric Charger Finder')
 r = redis.Redis(host='localhost', port=6379, decode_responses=True)
@@ -86,7 +87,7 @@ def query_nrel_api(location):
     return requests.get(base_url, params).json()
 
 
-def format_station_tree(results, connector_type, limit=10):
+def format_station_tree(results, connector_type):
     # filter for available stations
     available_stations = [x for x in results['fuel_stations'] if connector_type in x['ev_connector_types']]
     print(f"Found {len(available_stations)} available stations nearby.")
@@ -94,7 +95,7 @@ def format_station_tree(results, connector_type, limit=10):
     # now construct tree structure for user access
     myTree = avl.AVLTree()
     root = None
-    for station in available_stations[0:limit]:
+    for station in available_stations[0:9]: # only show first 9 stations because of google static map api limit
         root = myTree.insert_node(root, station['distance'], station)
 
     # myTree.printHelper(root)
@@ -105,7 +106,7 @@ def select_station(myTree, root):
     while True:
         try:
             id = int(input("Please enter the id of preferred station: "))
-            node = myTree.search(root, id)
+            node = myTree.traverse_search(root, id)
             if node is None:
                 raise ValueError
             return node
@@ -114,17 +115,32 @@ def select_station(myTree, root):
             continue
 
 
-def show_map_interactive():
+def show_map_static(myTree, root):
+    coor = ''
+    for node in myTree.traverse(root):
+        coor += f"{node.data['latitude']},{node.data['longitude']}|"
+    base_url = 'https://maps.googleapis.com/maps/api/staticmap?'
+    params = {
+        'key': credentials.GMAP_API_KEY,
+        'size': '640x480',
+        'format': 'png',
+        'markers': [],
+    }
+    i = 1
+    for node in myTree.traverse(root):
+        params['markers'].append( f"color:red|label:{i}|{node.data['latitude']},{node.data['longitude']}|" )
+        i += 1
+    with open("staticmap.png", "wb") as f:
+        f.write(requests.get(base_url, params).content)
+    im = Image.open("staticmap.png")
+    im.show()
+
+
+def show_station_interactive():
     pass
 
-def show_map_static():
-    pass
 
-def show_route_static():
-    pass
-
-
-def main():
+def core_function():
     connector_type = 'TESLA' # default connector type to Tesla
     print("----------------------------------")
     print("Welcome to Electric Charger Finder")
@@ -155,7 +171,7 @@ def main():
             while True:
                 print("----------------------------------")
                 print("1. Show results in command line")
-                print("2. Show results in web browser")
+                print("2. Show results in picture")
                 print("   Current selected: {}".format(dest['station_name']))
                 print("3. Select a different station")
                 print("4. Show detailed information of selected station")
@@ -166,19 +182,19 @@ def main():
                 print("----------------------------------")
 
                 if option == 1:
-                    myTree.preOrder(root)
+                    myTree.traverse_print(root)
                     printed = True
                 elif option == 2:
-                    pass
+                    show_map_static(myTree, root)
                 elif option == 3:
                     if not printed:
-                        myTree.preOrder(root)
+                        myTree.traverse_print(root)
                         printed = True
                     node = select_station(myTree, root)
                     dest = node.data
                     end = {'lat': dest['latitude'], 'lng': dest['longitude']}
                 elif option == 4:
-                    pass
+                    show_station_interactive()
                 elif option == 5:
                     webbrowser.open(f"http://127.0.0.1:5000/direction?start={start['lat']},{start['lng']}&end={end['lat']},{end['lng']}")
                 elif option == 6:
@@ -207,14 +223,19 @@ def start_server():
     print('Starting Flask app', app.name)
     app.run(debug=True, use_reloader=False)
 
-if __name__ == "__main__":
+def main():
     #app.run(debug=True)
     t = Process(target=start_server)
     t.start()
     time.sleep(1)
-    main()
+    core_function()
     print("Quitting...")
     print('Exiting Flask app', app.name)
     print("Goodbye!")
     t.terminate()
     t.join()
+
+if __name__ == "__main__":
+    main()
+    #show_map_static()
+

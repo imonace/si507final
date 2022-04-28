@@ -133,24 +133,31 @@ class AVLTree(object):
             return root
         return self.getMinValueNode(root.left)
 
-    def preOrder(self, root, id=0):
+    def traverse(self, root):
+        if not root:
+            return
+        yield from self.traverse(root.left)
+        yield root
+        yield from self.traverse(root.right)
+
+    def traverse_print(self, root, id=0):
         if not root:
             return id
-        id = self.preOrder(root.left,id)
+        id = self.traverse_print(root.left,id)
         id = id + 1
         print(f'{id}. "{root.data["station_name"]}" at {root.data["street_address"]}, {root.data["distance"]} miles away')
         root.data["id"] = id
         #print(f'{id}. {root.key}')
-        id = self.preOrder(root.right,id)
+        id = self.traverse_print(root.right,id)
         return id
 
-    def search(self, root, key):
+    def traverse_search(self, root, key):
         if root.data["id"] == key:
             return root
         if key < root.key:
-            return self.search(root.left, key)
+            return self.traverse_search(root.left, key)
         else:
-            return self.search(root.right, key)
+            return self.traverse_search(root.right, key)
 
 
     # Print the tree
@@ -178,4 +185,7 @@ if __name__ == "__main__":
     root = myTree.delete_node(root, key)
     print("After Deletion: ")
     myTree.printHelper(root, "", True)
-    myTree.preOrder(root)
+    #myTree.preOrder(root)
+
+    for node in myTree.traverse(root):
+        print(node.key)
