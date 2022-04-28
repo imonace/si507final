@@ -1,6 +1,7 @@
 import avl
 import credentials
 import json
+import logging
 import requests
 import redis
 import webbrowser
@@ -142,8 +143,8 @@ def show_map_static(myTree, root):
 def show_station_interactive(dest):
     base = 'http://127.0.0.1:5000/?'
     loc = 'loc=' + str(dest['latitude']) + ',' + str(dest['longitude']) + '&'
-    locTitle = 'locTitle=' + dest['station_name'] + '&'
-    locString = 'locString=' + '<p><b>Name: ' + dest['station_name'] + '</b></p>'\
+    locTitle = 'locTitle=' + dest['station_name'].replace('&','') + '&'
+    locString = 'locString=' + '<p><b>Name: ' + dest['station_name'].replace('&','') + '</b></p>'\
                              + '<p>Address: ' + dest['street_address'] + '</p>'\
                              + '<p>City: ' + dest['city'] + '</p>'\
                              + '<p>ZIP: ' + dest['zip'] + '</p>'\
@@ -193,7 +194,7 @@ def core_function():
                 print("6. Print tree data structure (debug)")
                 print("7. Back")
                 option = get_user_option()
-                print("----------------------------------")
+                #print("----------------------------------")
 
                 if option == 1:
                     myTree.traverse_print(root)
@@ -236,6 +237,9 @@ def start_server():
     # start flask server
     print('Starting Flask app', app.name)
     app.run(debug=True, use_reloader=False)
+
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 def main():
     #app.run(debug=True)

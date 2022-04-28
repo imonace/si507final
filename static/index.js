@@ -14,13 +14,19 @@ function initMap() {
     title: locTitle,
   });
 
-  //marker.addListener("click", () => {
+  marker.addListener("click", () => {
     infowindow.open({
       anchor: marker,
       map,
       shouldFocus: false,
     });
-  //});
+  });
+
+  infowindow.open({
+    anchor: marker,
+    map,
+    shouldFocus: false,
+  });
 }
 
 window.initMap = initMap;
